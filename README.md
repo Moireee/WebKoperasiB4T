@@ -81,3 +81,19 @@ Mode local demo sengaja tidak memerlukan akun database. Agar Admin dan anggota p
 - Mode database online menolak penghapusan permanen jika anggota masih terhubung ke pinjaman, transaksi, distribusi SHU, atau akun login. Tandai Nonaktif sebagai gantinya agar histori keuangan tetap terjaga.
 - Iuran wajib bulanan hanya direkam pada riwayat transaksi dan tidak menambah saldo simpanan sukarela. Dashboard anggota hanya menampilkan saldo simpanan sukarela sebagai saldo tabungan.
 - Jika Supabase sudah pernah disiapkan, jalankan ulang `supabase/schema.sql` pada project uji agar fungsi `record_member_transaction` diperbarui. Untuk project online yang sudah memiliki data, lakukan backup dan review dahulu sebelum menjalankan perubahan skema.
+
+## Pengajuan pinjaman anggota + cetak formulir
+
+- Anggota membuka menu **Ajukan Pinjaman** dan mengisi nama, alamat, telepon/HP, nomor KTP, tujuan pinjaman, tenor, nominal, rekening, keterangan jaminan, foto jaminan opsional, serta catatan lain.
+- Tujuan mengikuti formulir contoh: Pembelian Barang; Renovasi Rumah/Perbaikan Kendaraan; Sosial (Sakit & Musibah); Pembayaran Kontrakan; Lainnya.
+- Pilihan tenor mengikuti contoh: 12 bulan (14% margin), 24 bulan (16,5% margin), atau tenor lainnya. Margin ditampilkan sebagai pilihan formulir dan harus diverifikasi terhadap kebijakan resmi koperasi sebelum dipakai operasional.
+- Setelah dikirim, pengajuan berstatus **Diajukan** dan muncul di **Admin > Pengajuan Pinjaman**.
+- Admin dapat membuka detail, melihat foto jaminan, menambahkan catatan, mengubah status (Diajukan, Sedang ditinjau, Perlu dilengkapi, Disetujui, Ditolak), kemudian memilih **Cetak / Simpan PDF**. Dialog print browser dapat diarahkan ke printer atau “Save as PDF”.
+- Mode demo menyimpan pengajuan di localStorage browser yang sama. Data tidak tersinkron ke perangkat lain.
+- Mode Supabase memakai tabel `loan_applications` dan bucket Storage private `loan-application-collateral`. RLS membatasi pembacaan anggota ke pengajuannya sendiri dan Admin ke semua pengajuan.
+
+### Database Supabase sudah terlanjur dibuat?
+
+Jika project Supabase sudah memakai skema sebelumnya, jalankan `supabase/loan_applications_migration.sql` pada SQL Editor setelah mencadangkan project uji. Untuk instalasi database baru, jalankan `supabase/schema.sql` yang sudah mencakup fitur ini. Setelah itu, pastikan secret GitHub Actions `VITE_SUPABASE_URL` dan `VITE_SUPABASE_ANON_KEY` (anon/publishable key saja) sudah diatur apabila website dipublikasikan dengan koneksi database.
+
+**Data pribadi:** formulir memuat nomor KTP, alamat, nomor HP, rekening, dan foto jaminan. Jangan masukkan data nyata selama demo. Sebelum dipakai anggota sungguhan, audit RLS, Auth, privasi, backup, prosedur retensi/penghapusan data, serta alur persetujuan pinjaman.

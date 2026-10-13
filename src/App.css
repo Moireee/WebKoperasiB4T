@@ -98,10 +98,6 @@ td strong { color: #203b32; }
 .table-select { min-width: 100px; padding: 8px; font-size: 12px; }
 .small-btn { padding: 8px 10px; border: 1px solid #cddfd4; border-radius: 8px; background: #edf7f0; color: #1b694c; font-size: 11px; font-weight: 750; white-space: nowrap; }
 .small-btn:hover { background: #dff0e5; }
-.member-row-actions { display: flex; align-items: center; gap: 7px; }
-.danger-btn { padding: 8px 10px; border: 1px solid #efc2bd; border-radius: 8px; background: #fff2f0; color: #a3382e; font-size: 11px; font-weight: 750; white-space: nowrap; }
-.danger-btn:hover { background: #ffe4df; }
-.danger-btn:disabled { opacity: .55; cursor: wait; }
 .inline-edit { display: flex; align-items: center; gap: 6px; min-width: 175px; }
 .inline-edit input { min-width: 105px; padding: 8px; font-size: 11px; }
 .help-text { margin: 14px 0 0; color: #7c8a83; font-size: 11px; line-height: 1.65; }
@@ -202,3 +198,61 @@ td strong { color: #203b32; }
   .app-footer { margin-top: 24px; line-height: 1.6; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; } }
+
+/* Pengajuan pinjaman anggota + dokumen siap cetak */
+.required-mark { display: inline; color: #b42318; font-weight: 800; }
+.loan-application-form { margin-top: 18px; }
+.loan-application-form textarea { resize: vertical; line-height: 1.5; }
+.upload-preview { display: flex; align-items: center; gap: 14px; margin-top: 12px; padding: 12px; border: 1px solid #e1e9e4; border-radius: 11px; background: #f8fbf9; }
+.upload-preview img { width: 104px; height: 90px; object-fit: contain; border-radius: 8px; background: #edf2ef; }
+.upload-preview strong { display: block; overflow-wrap: anywhere; font-size: 12px; color: #315347; }
+.application-detail-area { margin-top: 28px; padding-top: 25px; border-top: 1px solid #e5ece8; }
+.detail-title { align-items: center; }
+.application-summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; margin: 14px 0 20px; border: 1px solid #e5ece8; border-radius: 12px; overflow: hidden; }
+.application-summary-grid > div { min-width: 0; padding: 13px 14px; border-bottom: 1px solid #eef2ef; }
+.application-summary-grid > div:nth-child(odd) { background: #fbfcfb; }
+.application-summary-grid > div.span-all { grid-column: 1 / -1; }
+.application-summary-grid span, .application-summary-grid strong { display: block; }
+.application-summary-grid span { margin-bottom: 5px; color: #74847b; font-size: 10px; font-weight: 750; text-transform: uppercase; letter-spacing: .35px; }
+.application-summary-grid strong { color: #253f34; font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; font-weight: 600; }
+.application-photo-preview { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; margin: 16px 0; padding: 14px; border: 1px dashed #b8cfc0; border-radius: 12px; }
+.application-photo-preview > span { color: #63766b; font-size: 12px; font-weight: 750; }
+.application-photo-preview img { max-width: min(100%, 420px); max-height: 360px; object-fit: contain; border-radius: 8px; background: #f4f7f5; }
+.application-photo-preview small { color: #7a8980; font-size: 11px; overflow-wrap: anywhere; }
+.review-form { padding: 15px; border-radius: 12px; background: #f6faf7; }
+.status-neutral { background: #eaf1f5; color: #466273; }
+.print-sheet { display: none; }
+
+@media (max-width: 700px) {
+  .application-summary-grid { grid-template-columns: 1fr; }
+  .application-summary-grid > div.span-all { grid-column: auto; }
+  .upload-preview { align-items: flex-start; }
+  .upload-preview img { width: 86px; height: 78px; flex: 0 0 86px; }
+  .detail-title { align-items: flex-start; }
+}
+
+@media print {
+  @page { size: A4; margin: 14mm; }
+  body * { visibility: hidden !important; }
+  .print-sheet, .print-sheet * { visibility: visible !important; }
+  .print-sheet { display: block !important; position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; padding: 0 !important; margin: 0 !important; border: 0 !important; border-radius: 0 !important; background: #fff !important; color: #111 !important; font-family: Arial, sans-serif !important; font-size: 10pt !important; box-shadow: none !important; }
+  .print-header { display: flex !important; align-items: center !important; gap: 14px !important; padding-bottom: 14px !important; border-bottom: 2px solid #145648 !important; margin-bottom: 18px !important; }
+  .print-logo { display: grid !important; place-items: center !important; width: 44px !important; height: 44px !important; flex: 0 0 44px !important; border: 2px solid #145648 !important; border-radius: 8px !important; color: #145648 !important; font-size: 24pt !important; font-weight: bold !important; }
+  .print-header h1 { margin: 0 0 4px !important; color: #123f34 !important; font-size: 17pt !important; }
+  .print-header p { margin: 0 !important; font-size: 10pt !important; letter-spacing: .4px !important; }
+  .print-meta { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 10px !important; margin: 14px 0 20px !important; padding: 10px !important; border: 1px solid #cfd8d2 !important; }
+  .print-meta b, .print-meta span { display: block !important; }
+  .print-meta b { color: #526057 !important; font-size: 8pt !important; margin-bottom: 4px !important; }
+  .print-sheet h2 { margin: 18px 0 8px !important; padding-bottom: 5px !important; border-bottom: 1px solid #d7ded9 !important; color: #173f33 !important; font-size: 10pt !important; page-break-after: avoid !important; }
+  .print-table { width: 100% !important; border-collapse: collapse !important; margin: 0 0 16px !important; font-size: 9pt !important; }
+  .print-table th, .print-table td { padding: 7px 8px !important; border: 1px solid #ccd4cf !important; background: white !important; color: #111 !important; white-space: normal !important; text-transform: none !important; font-size: 9pt !important; letter-spacing: 0 !important; }
+  .print-table th { width: 22% !important; font-weight: 700 !important; }
+  .print-photo { page-break-inside: avoid !important; }
+  .print-photo img { display: block !important; max-width: 115mm !important; max-height: 90mm !important; object-fit: contain !important; }
+  .print-admin-notes { margin-top: 14px !important; padding: 9px !important; border: 1px solid #ccd4cf !important; page-break-inside: avoid !important; }
+  .print-admin-notes p { min-height: 16px !important; margin: 5px 0 0 !important; }
+  .signature-grid { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 25px !important; margin-top: 30px !important; page-break-inside: avoid !important; text-align: center !important; }
+  .signature-grid p { margin: 0 !important; }
+  .signature-space { height: 65px !important; }
+  .print-sheet > footer { margin-top: 20px !important; padding-top: 8px !important; border-top: 1px solid #ccc !important; color: #555 !important; font-size: 8pt !important; }
+}

@@ -42,3 +42,13 @@ DDL dan RLS disediakan di `supabase/schema.sql`.
 - Dalam mode database online, penghapusan permanen diblokir bila ada pinjaman, transaksi, SHU, atau akun login yang terkait; status Nonaktif dianjurkan untuk menjaga histori.
 - Iuran wajib bulanan merupakan pembayaran rutin. Transaksinya tercatat, tetapi tidak menambah `voluntary_balance` maupun saldo simpanan yang ditampilkan kepada anggota.
 - Field database `mandatory_balance` dipertahankan hanya demi kompatibilitas data lama; bukan sumber saldo tabungan pada dashboard.
+
+## Pengajuan pinjaman anggota
+
+1. Anggota mengisi formulir dengan identitas, alamat, telepon, KTP, tujuan, tenor, nominal, nomor rekening beserta nama dan bank, keterangan jaminan, foto jaminan opsional, dan catatan tambahan.
+2. Pengajuan masuk ke menu Admin **Pengajuan Pinjaman** dengan status awal **Diajukan**.
+3. Admin membuka detail untuk meninjau informasi, menambahkan catatan, dan mengubah status.
+4. Admin dapat menggunakan **Cetak / Simpan PDF**. Lembar cetak berisi identitas pemohon, detail pinjaman, foto jaminan (bila ada), status, catatan Admin, dan kolom tanda tangan.
+5. Pengajuan yang disetujui belum otomatis menjadi pinjaman cair. Admin masih harus memverifikasi persetujuan dan mencatat pencairan melalui proses pinjaman yang sudah ada.
+
+Mode lokal menyimpan seluruh data demo dalam browser yang sama. Mode online memerlukan tabel `loan_applications` dan bucket private `loan-application-collateral`; schema dan migration disertakan. Karena formulir memuat data pribadi sensitif, jangan uji memakai data sungguhan sebelum konfigurasi dan pengujian keamanan selesai.
