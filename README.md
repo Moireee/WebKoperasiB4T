@@ -6,7 +6,7 @@ Prototype React + Vite yang dibangun dari `App.jsx` pengguna. Admin dan portal a
 
 - Login demo sebagai Admin atau anggota (Bayu/Sukiman).
 - Dashboard anggota: simpanan, pinjaman, riwayat transaksi, dan SHU.
-- Admin: tambah anggota, impor Excel/CSV, input transaksi, catat pinjaman, verifikasi sisa pinjaman, dan input hasil pembagian SHU.
+- Admin: tambah/edit/hapus anggota (penghapusan demo dapat menghapus catatan demo terkait), impor Excel/CSV, input transaksi, catat pinjaman, verifikasi sisa pinjaman, dan input hasil pembagian SHU.
 - Data demo disimpan dengan `localStorage` di browser yang sedang dipakai.
 - Bila variabel Supabase dikonfigurasi, halaman login menggunakan Supabase Auth dan data dibaca/ditulis ke database Supabase sesuai kebijakan RLS. Jalankan skema SQL lebih dahulu.
 
@@ -33,7 +33,7 @@ Admin > Impor Excel menerima:
 - Format tabular satu anggota per baris dengan kolom seperti `Anggota`, `Simpanan Wajib`, `Simpanan Sukarela`, `Pinjaman`, `Lama Pinjaman`, `Cicilan Perbulan`, `Jenis Pinjaman`, `Sisa Pinjaman`, `Jaminan Berupa`, dan `Status`.
 
 Aturan mapping penting:
-- `Simpanan Wajib` dibaca sebagai nominal iuran per bulan, bukan saldo akumulatif.
+- `Simpanan Wajib` dibaca sebagai nominal iuran per bulan, bukan saldo akumulatif. Pembayarannya dicatat di riwayat, tetapi tidak menambah saldo simpanan anggota.
 - `Simpanan Sukarela` dibaca sebagai saldo saat ini berdasarkan penjelasan pengguna.
 - `Pinjaman` disimpan sebagai nilai pinjaman awal.
 - `Sisa Pinjaman` dibaca terpisah. Jika kosong, sistem menyimpan sebagai belum diketahui dan Admin harus memverifikasi sebelum mencatat angsuran.
@@ -70,6 +70,14 @@ Mode local demo sengaja tidak memerlukan akun database. Agar Admin dan anggota p
 
 - Tanpa variabel Supabase, demo hanya tersimpan di browser saat ini (`localStorage`). Perubahan Admin tidak akan tersinkron ke HP/browser berbeda.
 - Login tombol demo bukan autentikasi sesungguhnya. Mode database menggunakan email/password Supabase, bukan login nomor anggota.
-- Nominal simpanan wajib bulanan tidak dianggap saldo akumulatif. Saldo awal yang kosong ditampilkan sebagai belum diinput.
+- Iuran wajib bulanan tidak dihitung ke saldo simpanan sukarela. Transaksi iuran wajib hanya dicatat pada riwayat. Field `mandatory_balance` dipertahankan di schema hanya untuk kompatibilitas data lama dan tidak digunakan pada total saldo dashboard.
+- Mode demo: tombol Hapus menghapus anggota serta data contoh pinjaman/transaksi/SHU terkait setelah konfirmasi. Mode database online: anggota yang sudah memiliki pinjaman, transaksi, pembagian SHU, atau akun login ditolak untuk penghapusan permanen; ubah status ke Nonaktif agar riwayat keuangan tetap terjaga.
 - Pembayaran angsuran meminta nilai `principal_paid` secara terpisah agar keseluruhan cicilan tidak otomatis dianggap pengurang pokok.
 - Ini masih prototipe. Sebelum dipakai untuk data keuangan nyata, perlu review aturan akuntansi koperasi, audit trail/koreksi, backup & pemulihan, autentikasi, RLS, dan pengujian keamanan. Repository GitHub publik tidak boleh menyimpan data anggota atau rahasia.
+
+## Revisi: hapus anggota dan iuran wajib
+- Tabel Data Anggota menyediakan tombol **Hapus** dengan konfirmasi.
+- Mode demo lokal menghapus anggota serta pinjaman/transaksi/SHU contoh terkait dari browser itu. Ini sengaja untuk kebutuhan presentasi dan tidak boleh dipakai sebagai kebijakan penghapusan pembukuan riil.
+- Mode database online menolak penghapusan permanen jika anggota masih terhubung ke pinjaman, transaksi, distribusi SHU, atau akun login. Tandai Nonaktif sebagai gantinya agar histori keuangan tetap terjaga.
+- Iuran wajib bulanan hanya direkam pada riwayat transaksi dan tidak menambah saldo simpanan sukarela. Dashboard anggota hanya menampilkan saldo simpanan sukarela sebagai saldo tabungan.
+- Jika Supabase sudah pernah disiapkan, jalankan ulang `supabase/schema.sql` pada project uji agar fungsi `record_member_transaction` diperbarui. Untuk project online yang sudah memiliki data, lakukan backup dan review dahulu sebelum menjalankan perubahan skema.

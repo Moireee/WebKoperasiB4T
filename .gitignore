@@ -1,12 +1,9 @@
-
 node_modules/
 dist/
 
-# File konfigurasi rahasia
+# Rahasia konfigurasi: jangan unggah ke repository publik
 .env
 .env.*
-
-# Izinkan file contoh konfigurasi
 !.env.example
 
 # File sistem

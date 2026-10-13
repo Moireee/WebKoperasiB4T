@@ -11,6 +11,7 @@ create table if not exists public.members (
   phone text,
   status text not null default 'Aktif' check (status in ('Aktif','Nonaktif')),
   monthly_mandatory numeric(16,2) not null default 0 check (monthly_mandatory >= 0),
+  -- Legacy compatibility field only. Monthly mandatory fee is not an individual savings balance.
   mandatory_balance numeric(16,2) check (mandatory_balance is null or mandatory_balance >= 0),
   voluntary_balance numeric(16,2) not null default 0 check (voluntary_balance >= 0),
   created_at timestamptz not null default now()
@@ -159,10 +160,9 @@ begin
   if p_amount is null or p_amount <= 0 then raise exception 'Nominal transaksi harus lebih dari nol.'; end if;
 
   if p_type = 'simpanan_wajib' then
-    select mandatory_balance into v_balance from public.members where id = p_member_id for update;
+    -- Iuran wajib hanya dicatat sebagai transaksi; tidak menambah saldo simpanan anggota.
+    perform 1 from public.members where id = p_member_id for update;
     if not found then raise exception 'Anggota tidak ditemukan.'; end if;
-    if v_balance is null then raise exception 'Saldo awal simpanan wajib belum diinput.'; end if;
-    update public.members set mandatory_balance = mandatory_balance + p_amount where id = p_member_id;
   elsif p_type = 'simpanan_sukarela' then
     update public.members set voluntary_balance = voluntary_balance + p_amount where id = p_member_id;
     if not found then raise exception 'Anggota tidak ditemukan.'; end if;

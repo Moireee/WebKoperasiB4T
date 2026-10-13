@@ -98,6 +98,10 @@ td strong { color: #203b32; }
 .table-select { min-width: 100px; padding: 8px; font-size: 12px; }
 .small-btn { padding: 8px 10px; border: 1px solid #cddfd4; border-radius: 8px; background: #edf7f0; color: #1b694c; font-size: 11px; font-weight: 750; white-space: nowrap; }
 .small-btn:hover { background: #dff0e5; }
+.member-row-actions { display: flex; align-items: center; gap: 7px; }
+.danger-btn { padding: 8px 10px; border: 1px solid #efc2bd; border-radius: 8px; background: #fff2f0; color: #a3382e; font-size: 11px; font-weight: 750; white-space: nowrap; }
+.danger-btn:hover { background: #ffe4df; }
+.danger-btn:disabled { opacity: .55; cursor: wait; }
 .inline-edit { display: flex; align-items: center; gap: 6px; min-width: 175px; }
 .inline-edit input { min-width: 105px; padding: 8px; font-size: 11px; }
 .help-text { margin: 14px 0 0; color: #7c8a83; font-size: 11px; line-height: 1.65; }
