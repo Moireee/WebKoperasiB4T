@@ -4,6 +4,7 @@ import { supabase, isSupabaseConfigured } from './lib/supabase';
 import './App.css';
 
 const STORAGE_KEY = 'koperasi-b4t-prototype-v3';
+const AUTH_STORAGE_KEY = 'koperasi-b4t-demo-auth-v1';
 const today = () => new Date().toISOString().slice(0, 10);
 const fmt = (value) => value === null || value === undefined || value === ''
   ? 'Belum diinput'
@@ -20,8 +21,8 @@ const labelType = (type) => ({
 function seedData() {
   return {
     members: [
-      { id: 'demo-bayu', memberNo: 'AGT-0001', name: 'Bayu', status: 'Aktif', monthlyMandatory: 50000, mandatoryBalance: null, voluntaryBalance: 45000000, phone: '' },
-      { id: 'demo-sukiman', memberNo: 'AGT-0002', name: 'Sukiman', status: 'Aktif', monthlyMandatory: 50000, mandatoryBalance: null, voluntaryBalance: 0, phone: '' },
+      { id: 'demo-bayu', memberNo: 'KBT-000001', name: 'Bayu', status: 'Aktif', monthlyMandatory: 50000, mandatoryBalance: null, voluntaryBalance: 45000000, phone: '' },
+      { id: 'demo-sukiman', memberNo: 'KBT-000002', name: 'Sukiman', status: 'Aktif', monthlyMandatory: 50000, mandatoryBalance: null, voluntaryBalance: 0, phone: '' },
     ],
     loans: [
       { id: 'loan-bayu', memberId: 'demo-bayu', principal: 10000000, remainingBalance: null, termMonths: 12, monthlyInstallment: 833500, loanType: 'Sosial', collateral: '', status: 'Aktif', startDate: today() },
@@ -30,12 +31,51 @@ function seedData() {
     transactions: [], shuRecords: [], loanApplications: [],
   };
 }
+function normalizeLogin(value) { return String(value || '').trim().toUpperCase(); }
+function generateTempPassword() {
+  const part = Math.random().toString(36).slice(2, 6).toUpperCase();
+  const digits = String(Math.floor(10 + Math.random() * 90));
+  return `${part}B4T!${digits}`;
+}
+function demoDefaultPassword(member) {
+  if (member.id === 'demo-bayu') return 'BayuB4T!001';
+  if (member.id === 'demo-sukiman') return 'SukimanB4T!002';
+  return generateTempPassword();
+}
+function loadDemoAccounts(members) {
+  const adminDefault = { id: 'demo-admin', username: 'admin', role: 'admin', memberId: null, password: 'DemoAdmin2026!', mustChangePassword: false, active: true };
+  let saved = [];
+  try {
+    const parsed = JSON.parse(localStorage.getItem(AUTH_STORAGE_KEY) || '[]');
+    if (Array.isArray(parsed)) saved = parsed;
+  } catch (e) { console.warn('Akun demo belum dapat dibaca.', e); }
+  const savedAdmin = saved.find((a) => a.role === 'admin');
+  const admin = savedAdmin ? { ...adminDefault, ...savedAdmin, username: 'admin' } : adminDefault;
+  const memberAccounts = [];
+  for (const member of members) {
+    const existing = saved.find((a) => a.role === 'member' && a.memberId === member.id);
+    if (existing) {
+      memberAccounts.push({ ...existing, username: member.memberNo });
+    } else if (['demo-bayu', 'demo-sukiman'].includes(member.id)) {
+      memberAccounts.push({ id: `demo-account-${member.id}`, username: member.memberNo, role: 'member', memberId: member.id, password: demoDefaultPassword(member), mustChangePassword: true, active: true });
+    }
+  }
+  return [admin, ...memberAccounts];
+}
+function normalizeSeedMemberNumbers(members) {
+  return members.map((member) => {
+    if (member.id === 'demo-bayu' && /^AGT-0*1$/i.test(member.memberNo || '')) return { ...member, memberNo: 'KBT-000001' };
+    if (member.id === 'demo-sukiman' && /^AGT-0*2$/i.test(member.memberNo || '')) return { ...member, memberNo: 'KBT-000002' };
+    return member;
+  });
+}
+
 function readLocal() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed.members)) return { members: parsed.members, loans: parsed.loans || [], transactions: parsed.transactions || [], shuRecords: parsed.shuRecords || [], loanApplications: parsed.loanApplications || [] };
+      if (Array.isArray(parsed.members)) return { members: normalizeSeedMemberNumbers(parsed.members), loans: parsed.loans || [], transactions: parsed.transactions || [], shuRecords: parsed.shuRecords || [], loanApplications: parsed.loanApplications || [] };
     }
   } catch (err) { console.warn('Data demo lokal tidak dapat dibaca', err); }
   return seedData();
@@ -54,7 +94,7 @@ function nextMemberNo(members) {
     const digits = String(m.memberNo || '').match(/(\d+)$/);
     return digits ? Math.max(current, Number(digits[1])) : current;
   }, 0);
-  return `AGT-${String(max + 1).padStart(4, '0')}`;
+  return `KBT-${String(max + 1).padStart(6, '0')}`;
 }
 
 // Parser untuk format blok vertikal pada Excel contoh (kolom B = label, kolom C = nilai),
@@ -181,6 +221,17 @@ export default function App() {
   const [loanApplications, setLoanApplications] = useState(initial.loanApplications || []);
   const [role, setRole] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [demoAccounts, setDemoAccounts] = useState(() => isSupabaseConfigured ? [] : loadDemoAccounts(initial.members));
+  const [currentDemoAccountId, setCurrentDemoAccountId] = useState('');
+  const [pendingDemoAccount, setPendingDemoAccount] = useState(null);
+  const [loginUsername, setLoginUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [firstNewPassword, setFirstNewPassword] = useState('');
+  const [firstConfirmPassword, setFirstConfirmPassword] = useState('');
+  const [ownCurrentPassword, setOwnCurrentPassword] = useState('');
+  const [ownNewPassword, setOwnNewPassword] = useState('');
+  const [ownConfirmPassword, setOwnConfirmPassword] = useState('');
+  const [issuedCredential, setIssuedCredential] = useState(null);
   const [activeMemberId, setActiveMemberId] = useState(initial.members[0]?.id || '');
   const [activeMenu, setActiveMenu] = useState('Dashboard');
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -228,6 +279,12 @@ export default function App() {
   }, [members, loans, transactions, shuRecords, loanApplications]);
 
   useEffect(() => {
+    if (isSupabaseConfigured) return;
+    try { localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(demoAccounts)); }
+    catch (e) { console.warn('Akun demo tidak dapat disimpan.', e); }
+  }, [demoAccounts]);
+
+  useEffect(() => {
     if (!isSupabaseConfigured) return undefined;
     let alive = true;
     (async () => {
@@ -273,16 +330,81 @@ export default function App() {
     } catch (e) { setError(e.message || 'Login gagal.'); }
     finally { setBusy(false); }
   }
-  function demoLogin(nextRole, id = members[0]?.id) {
+  function enterDemoAccount(account, customNotice = '') {
+    const nextRole = account.role;
+    const id = account.memberId || members[0]?.id || '';
     const chosenMember = members.find((m) => m.id === id) || members[0];
     setLoanApplicationForm({ applicantName: chosenMember?.name || '', address: '', phone: chosenMember?.phone || '', ktpNo: '', purpose: 'Pembelian Barang', otherPurpose: '', termChoice: '12', customTermMonths: '', loanAmount: '', bankAccount: '', collateralDescription: '', otherNotes: '' });
-    setRole(nextRole); setActiveMemberId(id || ''); setCloudProfile(null); setCloudSession(null);
-    setIsLoggedIn(true); setActiveMenu(nextRole === 'admin' ? 'Ringkasan Admin' : 'Dashboard');
-    setNotice('Mode demo aktif. Semua perubahan hanya tersimpan di browser ini.'); setError('');
+    setRole(nextRole); setActiveMemberId(id); setCloudProfile(null); setCloudSession(null);
+    setCurrentDemoAccountId(account.id); setPendingDemoAccount(null); setIsLoggedIn(true);
+    setActiveMenu(nextRole === 'admin' ? 'Ringkasan Admin' : 'Dashboard');
+    setNotice(customNotice || 'Mode demo aktif. Data hanya tersimpan di browser ini, bukan di database online.'); setError('');
+    setLoginPassword(''); setFirstNewPassword(''); setFirstConfirmPassword('');
+  }
+  function handleDemoLogin(event) {
+    event.preventDefault(); setError(''); setNotice('');
+    const username = normalizeLogin(loginUsername);
+    const account = demoAccounts.find((a) => normalizeLogin(a.username) === username && a.active !== false);
+    if (!account || account.password !== loginPassword) {
+      setError('Nomor anggota/username atau password tidak cocok. Periksa kembali data login.');
+      return;
+    }
+    if (account.role === 'member') {
+      const member = members.find((m) => m.id === account.memberId);
+      if (!member || member.status !== 'Aktif') {
+        setError('Akun anggota tidak ditemukan atau berstatus nonaktif. Hubungi Admin koperasi.');
+        return;
+      }
+    }
+    if (account.mustChangePassword) {
+      setPendingDemoAccount(account); setLoginPassword('');
+      setNotice('Ini login pertama atau password baru dari Admin. Buat password pribadi sebelum melanjutkan.');
+      return;
+    }
+    enterDemoAccount(account);
+  }
+  function finishFirstPasswordChange(event) {
+    event.preventDefault(); setError(''); setNotice('');
+    if (!pendingDemoAccount) return setError('Sesi aktivasi tidak ditemukan. Silakan login lagi.');
+    if (firstNewPassword.length < 8) return setError('Password baru minimal 8 karakter.');
+    if (firstNewPassword !== firstConfirmPassword) return setError('Konfirmasi password belum sama.');
+    if (firstNewPassword === pendingDemoAccount.password) return setError('Password baru harus berbeda dari password sementara.');
+    const updated = { ...pendingDemoAccount, password: firstNewPassword, mustChangePassword: false };
+    setDemoAccounts((prev) => prev.map((a) => a.id === updated.id ? updated : a));
+    enterDemoAccount(updated, 'Password berhasil diganti. Anda sudah masuk ke portal demo.');
+  }
+  function issueMemberTempPassword(member) {
+    if (!member || member.status !== 'Aktif') return setError('Akun hanya bisa disiapkan untuk anggota yang berstatus Aktif.');
+    const existing = demoAccounts.find((a) => a.role === 'member' && a.memberId === member.id);
+    const tempPassword = generateTempPassword();
+    const account = { id: existing?.id || `demo-account-${member.id}`, username: member.memberNo, role: 'member', memberId: member.id, password: tempPassword, mustChangePassword: true, active: true };
+    setDemoAccounts((prev) => existing ? prev.map((a) => a.id === existing.id ? account : a) : [...prev, account]);
+    setIssuedCredential({ memberId: member.id, username: member.memberNo, password: tempPassword });
+    setError(''); setNotice(`Password sementara dibuat untuk ${member.name}. Berikan secara pribadi dan minta anggota menggantinya saat login pertama.`);
+  }
+  async function changeOwnPassword(event) {
+    event.preventDefault(); setError(''); setNotice('');
+    if (ownNewPassword.length < 8) return setError('Password baru minimal 8 karakter.');
+    if (ownNewPassword !== ownConfirmPassword) return setError('Konfirmasi password belum sama.');
+    setBusy(true);
+    try {
+      if (isSupabaseConfigured) {
+        const { error: updateError } = await supabase.auth.updateUser({ password: ownNewPassword });
+        if (updateError) throw updateError;
+      } else {
+        const account = demoAccounts.find((a) => a.id === currentDemoAccountId);
+        if (!account || account.password !== ownCurrentPassword) throw new Error('Password saat ini tidak benar.');
+        if (account.password === ownNewPassword) throw new Error('Password baru harus berbeda dari password saat ini.');
+        setDemoAccounts((prev) => prev.map((a) => a.id === account.id ? { ...a, password: ownNewPassword, mustChangePassword: false } : a));
+      }
+      setOwnCurrentPassword(''); setOwnNewPassword(''); setOwnConfirmPassword('');
+      setNotice('Password berhasil diperbarui.');
+    } catch (e) { setError(e.message || 'Tidak dapat mengubah password.'); }
+    finally { setBusy(false); }
   }
   async function logout() {
     if (isSupabaseConfigured && cloudSession) await supabase.auth.signOut();
-    setIsLoggedIn(false); setRole(''); setCloudSession(null); setCloudProfile(null); setActiveMenu('Dashboard'); setMobileOpen(false); setHideBalances(false); setNotice(''); setError('');
+    setIsLoggedIn(false); setRole(''); setCloudSession(null); setCloudProfile(null); setCurrentDemoAccountId(''); setPendingDemoAccount(null); setLoginUsername(''); setLoginPassword(''); setActiveMenu('Dashboard'); setMobileOpen(false); setHideBalances(false); setNotice(''); setError('');
   }
   function navigate(label) { setActiveMenu(label); setMobileOpen(false); setNotice(''); setError(''); }
   function patchMemberLocal(id, patch) { setMembers((prev) => prev.map((m) => m.id === id ? { ...m, ...patch } : m)); }
@@ -299,7 +421,7 @@ export default function App() {
         setMembers((prev) => [...prev, mapMember(row)].sort((a, b) => a.memberNo.localeCompare(b.memberNo)));
       } else setMembers((prev) => [...prev, { ...data, id: uid() }].sort((a, b) => a.memberNo.localeCompare(b.memberNo)));
       setMemberForm({ name: '', phone: '', status: 'Aktif', monthlyMandatory: '50000', mandatoryBalance: '', voluntaryBalance: '0' });
-      setNotice(`Anggota ${data.name} berhasil ditambahkan (${data.memberNo}).`);
+      setNotice(isSupabaseConfigured ? `Anggota ${data.name} berhasil ditambahkan (${data.memberNo}). Akun login perlu dibuat melalui proses administrasi Supabase.` : `Anggota ${data.name} berhasil ditambahkan (${data.memberNo}). Buka menu Akun Anggota untuk membuat password sementara.`);
     } catch (e) { setError(`Gagal menambah anggota: ${e.message}`); }
     finally { setBusy(false); }
   }
@@ -577,12 +699,13 @@ export default function App() {
   }
 
   const nameFor = (id) => members.find((m) => m.id === id)?.name || '—';
-  if (!isLoggedIn) return <main className="login-page"><section className="login-card"><div className="login-logo">⌂</div><div className="login-brand">Koperasi B4T</div><div className="login-subbrand">Portal Digital Koperasi</div><h1>Selamat datang</h1><p className="login-desc">Lihat informasi simpanan, pinjaman, riwayat transaksi, dan SHU dalam satu portal.</p>
-    {isSupabaseConfigured ? <form className="form-stack" onSubmit={cloudLogin}><label>Email akun<input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nama@koperasi.id"/></label><label>Kata sandi<input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Kata sandi"/></label><button className="primary-btn full" disabled={busy}>{busy ? 'Memproses...' : 'Login'}</button><p className="muted">Database online aktif. Akun dan peran harus dibuat melalui Supabase.</p></form> : <div className="demo-entry"><button className="primary-btn full" onClick={() => demoLogin('admin')}>Masuk sebagai Admin Demo <span>→</span></button><label className="demo-member-select">Anggota demo<select value={activeMemberId || members[0]?.id || ''} onChange={(e) => setActiveMemberId(e.target.value)}>{members.map((m) => <option key={m.id} value={m.id}>{m.memberNo} — {m.name}</option>)}</select></label><button className="secondary-btn full" onClick={() => demoLogin('member', activeMemberId || members[0]?.id)}>Masuk sebagai Anggota Demo <span>→</span></button><p className="demo-note">Demo lokal: data perubahan tersimpan di browser ini saja, belum tersinkron ke perangkat lain.</p></div>}
-    {error && <div className="alert error">{error}</div>}<div className="login-footer">© {new Date().getFullYear()} Koperasi B4T</div></section></main>;
+  if (!isLoggedIn && pendingDemoAccount && !isSupabaseConfigured) return <main className="login-page"><section className="login-card"><div className="login-logo">⌂</div><div className="login-brand">Koperasi B4T</div><div className="login-subbrand">Aktivasi Akun Demo</div><h1>Ganti password sementara</h1><p className="login-desc">Akun <strong>{pendingDemoAccount.username}</strong> harus memakai password pribadi sebelum masuk ke portal.</p><form className="form-stack" onSubmit={finishFirstPasswordChange}><label>Password baru<input type="password" required minLength={8} autoComplete="new-password" value={firstNewPassword} onChange={(e) => setFirstNewPassword(e.target.value)} placeholder="Minimal 8 karakter"/></label><label>Ulangi password baru<input type="password" required minLength={8} autoComplete="new-password" value={firstConfirmPassword} onChange={(e) => setFirstConfirmPassword(e.target.value)} placeholder="Ketik ulang password"/></label><button className="primary-btn full" disabled={busy}>Simpan password dan masuk</button></form>{notice && <div className="alert success">{notice}</div>}{error && <div className="alert error">{error}</div>}<button type="button" className="text-btn login-back" onClick={() => { setPendingDemoAccount(null); setFirstNewPassword(''); setFirstConfirmPassword(''); setNotice(''); setError(''); }}>Kembali ke login</button><p className="demo-note">Simulasi lokal: password disimpan di browser ini dan bukan sistem keamanan untuk data asli.</p></section></main>;
+  if (!isLoggedIn) return <main className="login-page"><section className="login-card"><div className="login-logo">⌂</div><div className="login-brand">Koperasi B4T</div><div className="login-subbrand">Portal Digital Koperasi</div><h1>Selamat datang</h1><p className="login-desc">Masuk menggunakan nomor anggota atau username Admin untuk melihat informasi koperasi.</p>
+    {isSupabaseConfigured ? <form className="form-stack" onSubmit={cloudLogin}><label>Email akun<input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nama@koperasi.id"/></label><label>Kata sandi<input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Kata sandi"/></label><button className="primary-btn full" disabled={busy}>{busy ? 'Memproses...' : 'Login'}</button><p className="muted">Database online aktif. Login menggunakan akun Supabase; pemetaan nomor anggota ke akun autentikasi perlu diatur terpisah.</p></form> : <form className="form-stack" onSubmit={handleDemoLogin}><label>Nomor anggota / username Admin<input required autoComplete="username" value={loginUsername} onChange={(e) => setLoginUsername(e.target.value)} placeholder="KBT-000001 atau admin"/></label><label>Password<input required type="password" autoComplete="current-password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} placeholder="Masukkan password"/></label><button className="primary-btn full" disabled={busy}>{busy ? 'Memproses...' : 'Login'}</button><details className="demo-credentials"><summary>Akun demo untuk mencoba</summary><div><p><strong>Admin</strong><br/>Username: <code>admin</code><br/>Password: <code>DemoAdmin2026!</code></p><p><strong>Bayu — {members.find((m) => m.id === 'demo-bayu')?.memberNo || 'KBT-000001'}</strong><br/>Password sementara: <code>BayuB4T!001</code></p><p><strong>Sukiman — {members.find((m) => m.id === 'demo-sukiman')?.memberNo || 'KBT-000002'}</strong><br/>Password sementara: <code>SukimanB4T!002</code></p><small>Anggota demo diminta mengganti password pada login pertama. Jika password sudah diganti sebelumnya pada browser ini, gunakan password baru tersebut.</small></div></details><p className="demo-note">Mode simulasi: data dan akun tersimpan di browser ini saja. Browser/perangkat lain tidak tersinkron.</p></form>}
+    {notice && <div className="alert success">{notice}</div>}{error && <div className="alert error">{error}</div>}<div className="login-footer">© {new Date().getFullYear()} Koperasi B4T · Prototype Demo</div></section></main>;
 
-  const adminMenu = [['▦', 'Ringkasan Admin'], ['♙', 'Data Anggota'], ['⇧', 'Impor Excel'], ['＋', 'Input Transaksi'], ['▤', 'Pinjaman'], ['✉', 'Pengajuan Pinjaman'], ['◎', 'SHU Tahunan'], ['◷', 'Riwayat Transaksi']];
-  const memberMenu = [['▦', 'Dashboard'], ['◷', 'Riwayat Transaksi'], ['◎', 'Simpanan Saya'], ['▤', 'Pinjaman Saya'], ['＋', 'Ajukan Pinjaman'], ['✧', 'SHU Saya'], ['♙', 'Profil Anggota']];
+  const adminMenu = [['▦', 'Ringkasan Admin'], ['♙', 'Data Anggota'], ['⚿', 'Akun Anggota'], ['⇧', 'Impor Excel'], ['＋', 'Input Transaksi'], ['▤', 'Pinjaman'], ['✉', 'Pengajuan Pinjaman'], ['◎', 'SHU Tahunan'], ['◷', 'Riwayat Transaksi'], ['♧', 'Keamanan Akun']];
+  const memberMenu = [['▦', 'Dashboard'], ['◷', 'Riwayat Transaksi'], ['◎', 'Simpanan Saya'], ['▤', 'Pinjaman Saya'], ['＋', 'Ajukan Pinjaman'], ['✧', 'SHU Saya'], ['♙', 'Profil Anggota'], ['♧', 'Keamanan Akun']];
   const isAdmin = role === 'admin';
   const menu = isAdmin ? adminMenu : memberMenu;
   const recentTx = transactions.slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
@@ -598,6 +721,18 @@ export default function App() {
       {isAdmin && activeMenu === 'Ringkasan Admin' && <><section className="stats-grid"><Stat icon="♙" label="Jumlah anggota" value={members.length} hint="Anggota terdaftar"/><Stat icon="◈" label="Total simpanan sukarela" value={fmt(memberTotalVoluntary)} hint="Saldo dari data yang tersimpan"/><Stat icon="◎" label="Saldo wajib tercatat" value={fmt(knownMandatoryTotal)} hint="Tidak termasuk saldo yang belum diketahui"/><Stat icon="▤" label="Pinjaman perlu verifikasi" value={loans.filter((l) => l.remainingBalance == null && l.status !== 'Lunas').length} hint="Sisa pinjaman perlu dicek"/></section><section className="panel section-panel"><div className="section-title-row"><div><h2>Transaksi terbaru</h2><p className="muted">Aktivitas yang sudah dicatat.</p></div><button className="text-btn" onClick={() => navigate('Riwayat Transaksi')}>Lihat semua →</button></div><TxTable rows={recentTx.slice(0, 8)} members={members}/></section></>}
 
       {isAdmin && activeMenu === 'Data Anggota' && <section className="panel section-panel"><div className="section-title-row"><div><h2>Data anggota</h2><p className="muted">Iuran bulanan dibedakan dari saldo simpanan wajib akumulatif.</p></div></div><form className="form-grid" onSubmit={addMember}><label>Nama anggota<input required value={memberForm.name} onChange={(e) => setMemberForm({ ...memberForm, name: e.target.value })} placeholder="Nama lengkap"/></label><label>Nomor HP (opsional)<input value={memberForm.phone} onChange={(e) => setMemberForm({ ...memberForm, phone: e.target.value })} placeholder="08..."/></label><label>Iuran wajib per bulan (Rp)<input type="number" min="0" value={memberForm.monthlyMandatory} onChange={(e) => setMemberForm({ ...memberForm, monthlyMandatory: e.target.value })}/></label><label>Saldo awal simpanan wajib (Rp)<input type="number" min="0" value={memberForm.mandatoryBalance} onChange={(e) => setMemberForm({ ...memberForm, mandatoryBalance: e.target.value })} placeholder="Kosong = belum diketahui"/></label><label>Saldo simpanan sukarela (Rp)<input required type="number" min="0" value={memberForm.voluntaryBalance} onChange={(e) => setMemberForm({ ...memberForm, voluntaryBalance: e.target.value })}/></label><label>Status<select value={memberForm.status} onChange={(e) => setMemberForm({ ...memberForm, status: e.target.value })}><option>Aktif</option><option>Nonaktif</option></select></label><div className="form-actions"><button className="primary-btn" disabled={busy}>{busy ? 'Menyimpan...' : '＋ Tambah anggota'}</button></div></form><div className="table-scroll"><table><thead><tr><th>No. anggota</th><th>Nama</th><th>Iuran/bulan</th><th>Saldo wajib</th><th>Saldo sukarela</th><th>Status</th><th>Saldo awal</th></tr></thead><tbody>{members.map((m) => <MemberEditRow key={m.id} member={m} onSave={saveMemberBalance}/>) }{!members.length && <tr><td className="empty" colSpan="7">Belum ada anggota.</td></tr>}</tbody></table></div><p className="help-text">Untuk anggota impor yang saldo wajibnya belum tercatat, masukkan saldo yang telah direkonsiliasi sebelum mencatat setoran baru.</p></section>}
+
+      {isAdmin && activeMenu === 'Akun Anggota' && <section className="panel section-panel">
+        <div className="section-title-row"><div><h2>Akun login anggota</h2><p className="muted">Admin dapat membuat atau mengatur ulang password sementara. Anggota diwajibkan menggantinya saat login pertama.</p></div></div>
+        {isSupabaseConfigured ? <div className="callout"><strong>Mode database online</strong><p>Akun online harus dibuat melalui alur Supabase Auth yang aman. Panel reset password demo lokal dinonaktifkan untuk mencegah perubahan akun yang tidak benar-benar tersinkron.</p></div> : <>
+          <div className="callout"><strong>Simulasi lokal</strong><p>Password disimpan di browser ini untuk keperluan presentasi saja. Jangan gunakan password atau data asli. Di sistem final, pembuatan akun dan reset password harus ditangani backend autentikasi.</p></div>
+          {issuedCredential && <div className="import-report"><strong>Password sementara dibuat</strong><p>Anggota: {members.find((m) => m.id === issuedCredential.memberId)?.name || '—'}</p><p>Username: <code>{issuedCredential.username}</code></p><p>Password sementara: <code>{issuedCredential.password}</code></p><p>Berikan password ini secara pribadi. Hasil akan kembali tersembunyi saat halaman dimuat ulang.</p><button type="button" className="small-btn" onClick={() => setIssuedCredential(null)}>Sembunyikan kredensial</button></div>}
+          <div className="table-scroll"><table><thead><tr><th>Nomor anggota</th><th>Nama</th><th>Status anggota</th><th>Status akun</th><th>Aksi</th></tr></thead><tbody>{members.map((member) => { const account = demoAccounts.find((a) => a.role === 'member' && a.memberId === member.id); return <tr key={member.id}><td>{member.memberNo}</td><td><strong>{member.name}</strong></td><td>{member.status}</td><td>{!account ? <span className="status status-neutral">Belum dibuat</span> : account.mustChangePassword ? <span className="status pending-status">Password sementara</span> : <span className="status success-status">Aktif</span>}</td><td><button type="button" className="small-btn" disabled={member.status !== 'Aktif'} onClick={() => issueMemberTempPassword(member)}>{account ? 'Reset password' : 'Buat akun / password'}</button></td></tr>; })}{!members.length && <tr><td colSpan="5" className="empty">Belum ada anggota.</td></tr>}</tbody></table></div>
+          <p className="help-text">Nomor anggota baru dibuat otomatis dengan format KBT-000001 dan seterusnya. Nomor anggota dari Excel yang sudah ada tetap dipertahankan.</p>
+        </>}
+      </section>}
+
+      {activeMenu === 'Keamanan Akun' && <section className="panel section-panel security-panel"><div className="section-title-row"><div><h2>Ganti password</h2><p className="muted">Gunakan password pribadi dan jangan bagikan kepada orang lain.</p></div></div><form className="form-grid" onSubmit={changeOwnPassword}>{!isSupabaseConfigured && <label className="span-two">Password saat ini<input required type="password" autoComplete="current-password" value={ownCurrentPassword} onChange={(e) => setOwnCurrentPassword(e.target.value)} placeholder="Masukkan password saat ini"/></label>}<label>Password baru<input required minLength={8} type="password" autoComplete="new-password" value={ownNewPassword} onChange={(e) => setOwnNewPassword(e.target.value)} placeholder="Minimal 8 karakter"/></label><label>Ulangi password baru<input required minLength={8} type="password" autoComplete="new-password" value={ownConfirmPassword} onChange={(e) => setOwnConfirmPassword(e.target.value)} placeholder="Ketik ulang password baru"/></label><div className="form-actions"><button className="primary-btn" disabled={busy}>Simpan password baru</button></div></form>{!isSupabaseConfigured && <div className="callout"><strong>Catatan demo</strong><p>Perubahan password hanya berlaku pada browser ini. Di aplikasi final, password dikelola layanan autentikasi dan tidak disimpan sebagai teks biasa.</p></div>}</section>}
 
       {isAdmin && activeMenu === 'Impor Excel' && <section className="panel section-panel"><div className="section-title-row"><div><h2>Impor Excel</h2><p className="muted">Membaca format blok vertikal seperti Excel contoh dan tabel satu baris per anggota.</p></div></div><div className="callout"><strong>Aturan impor aman</strong><p>Impor hanya menambahkan anggota baru. Nama yang sudah ada dilewati untuk mencegah file yang sama menggandakan anggota atau menimpa saldo yang sudah berjalan.</p><p>“Simpanan wajib Rp50.000 per bulan” dianggap sebagai besaran iuran, bukan saldo akumulasi. Sisa pinjaman kosong tetap kosong dan perlu diverifikasi Admin.</p></div><label className="file-drop"><span className="file-symbol">⇧</span><span><strong>Pilih file Excel (.xlsx, .xls) atau CSV</strong><small>{excelFileName || 'File dibaca di browser, lalu tampilkan pratinjau.'}</small></span><input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => readExcel(e.target.files?.[0])}/></label>{excelPreview.length > 0 && <><div className="section-title-row preview-heading"><div><h3>Pratinjau — {excelPreview.length} baris anggota</h3><p className="muted">Periksa peringatan sebelum menyimpan.</p></div><button className="secondary-btn" onClick={() => { setExcelPreview([]); setExcelFileName(''); }}>Batalkan</button></div><div className="table-scroll"><table><thead><tr><th>Nama</th><th>Iuran/bln</th><th>Simpanan sukarela</th><th>Pinjaman awal</th><th>Sisa pinjaman</th><th>Catatan</th></tr></thead><tbody>{excelPreview.map((r) => <tr key={r.previewId} className={r.duplicate ? 'duplicate' : ''}><td><strong>{r.name}</strong><small className="cell-note">{r.duplicate ? 'Duplikat — dilewati' : r.memberNo || 'Nomor otomatis'}</small></td><td>{fmt(r.monthlyMandatory)}</td><td>{fmt(r.voluntaryBalance)}</td><td>{fmt(r.loanPrincipal)}</td><td>{fmt(r.remainingBalance)}</td><td>{[...(r.warnings || []), ...(r.duplicate ? ['Nama/nomor sudah ada.'] : [])].join(' ') || '—'}</td></tr>)}</tbody></table></div><button className="primary-btn" disabled={busy} onClick={importExcel}>{busy ? 'Mengimpor...' : 'Konfirmasi impor anggota baru'}</button></>}{importReport && <div className="import-report"><strong>Hasil impor</strong><p>{importReport.imported} anggota ditambahkan · {importReport.loans} pinjaman · {importReport.skipped.length} duplikat dilewati · {importReport.failures.length} gagal.</p>{importReport.skipped.length > 0 && <p>Dilewati: {importReport.skipped.join(', ')}</p>}{importReport.failures.map((f) => <p key={f} className="danger-text">{f}</p>)}</div>}</section>}
 

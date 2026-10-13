@@ -97,3 +97,9 @@ Mode local demo sengaja tidak memerlukan akun database. Agar Admin dan anggota p
 Jika project Supabase sudah memakai skema sebelumnya, jalankan `supabase/loan_applications_migration.sql` pada SQL Editor setelah mencadangkan project uji. Untuk instalasi database baru, jalankan `supabase/schema.sql` yang sudah mencakup fitur ini. Setelah itu, pastikan secret GitHub Actions `VITE_SUPABASE_URL` dan `VITE_SUPABASE_ANON_KEY` (anon/publishable key saja) sudah diatur apabila website dipublikasikan dengan koneksi database.
 
 **Data pribadi:** formulir memuat nomor KTP, alamat, nomor HP, rekening, dan foto jaminan. Jangan masukkan data nyata selama demo. Sebelum dipakai anggota sungguhan, audit RLS, Auth, privasi, backup, prosedur retensi/penghapusan data, serta alur persetujuan pinjaman.
+
+## Simulasi login nomor anggota dan password
+
+Lihat `LOGIN_DEMO.md` untuk kredensial demo. Pada mode demo lokal, anggota menggunakan nomor anggota sebagai username dan password sementara. Login pertama memaksa anggota membuat password sendiri. Admin dapat membuat/reset password sementara dari menu **Akun Anggota**; kedua peran dapat mengubah password melalui **Keamanan Akun**.
+
+Peringatan: kredensial dan data demo disimpan hanya untuk simulasi di browser. Jangan gunakan data atau kata sandi asli. Untuk sistem final, autentikasi harus dijalankan oleh layanan Auth/backend dan database dilindungi dengan aturan akses yang benar.

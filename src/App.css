@@ -256,3 +256,15 @@ td strong { color: #203b32; }
   .signature-space { height: 65px !important; }
   .print-sheet > footer { margin-top: 20px !important; padding-top: 8px !important; border-top: 1px solid #ccc !important; color: #555 !important; font-size: 8pt !important; }
 }
+
+
+/* Login demo dengan nomor anggota dan password sementara */
+.demo-credentials { margin-top: 15px; padding: 12px 13px; border: 1px solid #dce8df; border-radius: 11px; text-align: left; background: #f8fbf9; color: #395448; }
+.demo-credentials summary { cursor: pointer; color: #23654f; font-size: 12px; font-weight: 750; }
+.demo-credentials > div { padding-top: 8px; }
+.demo-credentials p { margin: 8px 0; font-size: 11px; line-height: 1.6; }
+.demo-credentials code { padding: 2px 5px; border-radius: 5px; background: #e9f0eb; color: #184c38; font-size: 11px; overflow-wrap: anywhere; }
+.demo-credentials small { display: block; margin-top: 10px; color: #7a8981; font-size: 10px; line-height: 1.6; }
+.alert.success { margin-top: 15px; padding: 11px 12px; border: 1px solid #b8e1c7; border-radius: 10px; background: #effaf2; color: #22613b; font-size: 12px; line-height: 1.55; }
+.login-back { display: block; margin: 15px auto 0; }
+.security-panel { max-width: 850px; }
