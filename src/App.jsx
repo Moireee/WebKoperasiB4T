@@ -16,6 +16,7 @@ const labelType = (type) => ({
   penarikan_sukarela: 'Penarikan simpanan sukarela',
   angsuran_pinjaman: 'Pembayaran angsuran pinjaman',
   pencairan_pinjaman: 'Pencairan pinjaman',
+  pengajuan_pinjaman_disetujui: 'Pengajuan pinjaman disetujui (menunggu pencairan)',
 }[type] || type);
 
 function seedData() {
@@ -199,7 +200,7 @@ function Stat({ icon, label, value, hint }) {
 function TxTable({ rows, members }) {
   const name = (id) => members.find((m) => m.id === id)?.name || '—';
   return <div className="table-scroll"><table><thead><tr><th>Tanggal</th><th>Anggota</th><th>Jenis transaksi</th><th>Nominal</th><th>Catatan</th></tr></thead><tbody>
-    {rows.map((t) => <tr key={t.id}><td>{t.date || '—'}</td><td>{name(t.memberId)}</td><td>{labelType(t.type)}</td><td className={['simpanan_wajib', 'simpanan_sukarela'].includes(t.type) ? 'positive' : 'negative'}>{fmt(t.amount)}</td><td>{t.notes || '—'}{t.type === 'angsuran_pinjaman' && t.principalPaid > 0 && <small className="cell-note">Pengurang pokok: {fmt(t.principalPaid)}</small>}</td></tr>)}
+    {rows.map((t) => <tr key={t.id}><td>{t.date || '—'}</td><td>{name(t.memberId)}</td><td>{labelType(t.type)}</td><td className={['simpanan_wajib', 'simpanan_sukarela'].includes(t.type) ? 'positive' : t.type === 'pengajuan_pinjaman_disetujui' ? '' : 'negative'}>{fmt(t.amount)}</td><td>{t.notes || '—'}{t.type === 'angsuran_pinjaman' && t.principalPaid > 0 && <small className="cell-note">Pengurang pokok: {fmt(t.principalPaid)}</small>}</td></tr>)}
     {!rows.length && <tr><td className="empty" colSpan="5">Belum ada transaksi.</td></tr>}
   </tbody></table></div>;
 }
@@ -227,6 +228,9 @@ export default function App() {
   const [pendingDemoAccount, setPendingDemoAccount] = useState(null);
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [loginSuccess, setLoginSuccess] = useState(false);
+  const [loginSuccessRole, setLoginSuccessRole] = useState('member');
   const [firstNewPassword, setFirstNewPassword] = useState('');
   const [firstConfirmPassword, setFirstConfirmPassword] = useState('');
   const [ownCurrentPassword, setOwnCurrentPassword] = useState('');
@@ -263,7 +267,19 @@ export default function App() {
   const memberId = role === 'member' ? (cloudProfile?.member_id || activeMemberId) : activeMemberId;
   const activeMember = members.find((m) => m.id === memberId) || (role === 'member' ? members[0] : null);
   const memberLoans = loans.filter((l) => l.memberId === activeMember?.id);
-  const memberTransactions = transactions.filter((t) => t.memberId === activeMember?.id).slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  const approvedApplicationHistory = loanApplications
+    .filter((application) => application.memberId === activeMember?.id && application.status === 'Disetujui')
+    .map((application) => ({
+      id: `approved-app-${application.id}`,
+      memberId: application.memberId,
+      type: 'pengajuan_pinjaman_disetujui',
+      amount: Number(application.loanAmount || 0),
+      date: String(application.reviewedAt || application.submittedAt || '').slice(0, 10),
+      notes: `No. ${application.applicationNo}. Disetujui Admin; dana belum dianggap cair sampai pencairan dicatat.`,
+      status: 'Disetujui',
+    }));
+  const memberTransactions = [...transactions.filter((t) => t.memberId === activeMember?.id), ...approvedApplicationHistory]
+    .slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
   const memberShu = shuRecords.filter((s) => s.memberId === activeMember?.id).slice().sort((a, b) => Number(b.year) - Number(a.year));
   const unresolvedLoans = memberLoans.some((l) => l.remainingBalance == null && l.status !== 'Lunas');
   const totalSavings = activeMember ? Number(activeMember.voluntaryBalance || 0) : null;
@@ -272,6 +288,12 @@ export default function App() {
   const localBanner = isSupabaseConfigured
     ? 'Database online aktif; akses data diatur oleh peran akun.'
     : 'Demo lokal: data tersimpan di browser ini saja dan belum tersinkron ke perangkat lain.';
+
+  useEffect(() => {
+    if (!loginSuccess) return undefined;
+    const timer = window.setTimeout(() => setLoginSuccess(false), 1900);
+    return () => window.clearTimeout(timer);
+  }, [loginSuccess]);
 
   useEffect(() => {
     if (isSupabaseConfigured) return;
@@ -296,7 +318,7 @@ export default function App() {
     return () => { alive = false; };
   }, []);
 
-  async function hydrateSession(session, isAlive = () => true) {
+  async function hydrateSession(session, isAlive = () => true, showSuccessAnimation = false) {
     setBusy(true);
     setError('');
     try {
@@ -314,6 +336,7 @@ export default function App() {
       if (profileMember) setLoanApplicationForm((prev) => ({ ...prev, applicantName: profileMember.name || '', phone: profileMember.phone || '' }));
       setActiveMenu(profile.role === 'admin' ? 'Ringkasan Admin' : 'Dashboard');
       setIsLoggedIn(true);
+      if (showSuccessAnimation) { setLoginSuccessRole(profile.role); setLoginSuccess(true); }
     } catch (e) {
       setError(`Tidak dapat memuat akun atau database: ${e.message}`);
     } finally { setBusy(false); }
@@ -324,7 +347,7 @@ export default function App() {
   }
   function chooseLoginMode(mode) {
     setLoginMode(mode);
-    setLoginUsername(''); setLoginPassword(''); setEmail(''); setPassword('');
+    setLoginUsername(''); setLoginPassword(''); setShowLoginPassword(false); setEmail(''); setPassword('');
     setError(''); setNotice('');
   }
   async function cloudLogin(event) {
@@ -342,7 +365,7 @@ export default function App() {
           ? 'Akun ini bukan akun Admin. Gunakan login anggota atau hubungi pengurus.'
           : 'Akun ini bukan akun anggota. Jika Anda pengurus, gunakan Login Admin.');
       }
-      await hydrateSession(data.session);
+      await hydrateSession(data.session, () => true, true);
     } catch (e) { setError(e.message || 'Login gagal.'); }
     finally { setBusy(false); }
   }
@@ -353,6 +376,7 @@ export default function App() {
     setLoanApplicationForm({ applicantName: chosenMember?.name || '', address: '', phone: chosenMember?.phone || '', ktpNo: '', purpose: 'Pembelian Barang', otherPurpose: '', termChoice: '12', customTermMonths: '', loanAmount: '', bankAccount: '', collateralDescription: '', otherNotes: '' });
     setRole(nextRole); setActiveMemberId(id); setCloudProfile(null); setCloudSession(null);
     setCurrentDemoAccountId(account.id); setPendingDemoAccount(null); setIsLoggedIn(true);
+    setLoginSuccessRole(nextRole); setLoginSuccess(true);
     setActiveMenu(nextRole === 'admin' ? 'Ringkasan Admin' : 'Dashboard');
     setNotice(customNotice || 'Mode demo aktif. Data hanya tersimpan di browser ini, bukan di database online.'); setError('');
     setLoginPassword(''); setFirstNewPassword(''); setFirstConfirmPassword('');
@@ -573,6 +597,49 @@ export default function App() {
     finally { setBusy(false); }
   }
 
+  async function deleteMember(member) {
+    if (!member) return;
+    const linkedLoans = loans.filter((item) => item.memberId === member.id);
+    const linkedTransactions = transactions.filter((item) => item.memberId === member.id);
+    const linkedShu = shuRecords.filter((item) => item.memberId === member.id);
+    const linkedApplications = loanApplications.filter((item) => item.memberId === member.id);
+
+    if (linkedLoans.length || linkedTransactions.length || linkedShu.length || linkedApplications.length) {
+      setError(`Anggota ${member.name} tidak bisa dihapus karena masih memiliki riwayat pinjaman (${linkedLoans.length}), transaksi (${linkedTransactions.length}), SHU (${linkedShu.length}), atau pengajuan pinjaman (${linkedApplications.length}). Ubah status menjadi Nonaktif agar riwayat keuangan tetap tersimpan.`);
+      setNotice('');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Hapus anggota ${member.name} (${member.memberNo})? Tindakan ini tidak dapat dibatalkan.`
+    );
+    if (!confirmed) return;
+
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      if (isSupabaseConfigured) {
+        const { error: deleteError } = await supabase.from('members').delete().eq('id', member.id);
+        if (deleteError) throw deleteError;
+        await refreshCloud();
+      } else {
+        setMembers((prev) => prev.filter((item) => item.id !== member.id));
+        setDemoAccounts((prev) => prev.filter((account) => account.memberId !== member.id));
+        if (activeMemberId === member.id) {
+          const nextMember = members.find((item) => item.id !== member.id);
+          setActiveMemberId(nextMember?.id || '');
+        }
+        if (issuedCredential?.memberId === member.id) setIssuedCredential(null);
+      }
+      setNotice(`Anggota ${member.name} (${member.memberNo}) berhasil dihapus.`);
+    } catch (e) {
+      setError(`Gagal menghapus anggota: ${e.message}. Jika akun masih terhubung ke profil login database, lepaskan hubungan akun tersebut terlebih dahulu.`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function saveMemberBalance(id, patch) {
     const clean = { monthlyMandatory: Number(patch.monthlyMandatory || 0), mandatoryBalance: patch.mandatoryBalance === '' ? null : Number(patch.mandatoryBalance), voluntaryBalance: Number(patch.voluntaryBalance || 0), status: patch.status || 'Aktif' };
     setBusy(true); setError(''); setNotice('');
@@ -727,7 +794,7 @@ export default function App() {
   if (!isLoggedIn && loginMode === 'choose') return <main className="login-page"><section className="login-card login-choice-card"><div className="login-logo">⌂</div><div className="login-brand">Koperasi B4T</div><div className="login-subbrand">Portal Digital Koperasi</div><h1>Selamat datang</h1><p className="login-desc">Silakan pilih portal sesuai peran Anda.</p><div className="login-role-options"><button type="button" className="primary-btn full role-option" onClick={() => chooseLoginMode('member')}><span className="role-option-icon">♙</span><span><strong>Login Anggota</strong><small>Saldo, simpanan, pinjaman, dan SHU</small></span><span className="role-option-arrow">→</span></button><button type="button" className="secondary-btn full role-option" onClick={() => chooseLoginMode('admin')}><span className="role-option-icon">▣</span><span><strong>Login Admin / Pengurus</strong><small>Kelola anggota dan operasional koperasi</small></span><span className="role-option-arrow">→</span></button></div><p className="demo-note">Ini prototype demo. Gunakan akun fiktif; login belum menjadi pengaman untuk data keuangan asli.</p><div className="login-footer">© {new Date().getFullYear()} Koperasi B4T</div></section></main>;
 
   if (!isLoggedIn) return <main className="login-page"><section className="login-card"><div className="login-logo">⌂</div><div className="login-brand">Koperasi B4T</div><div className="login-subbrand">{loginMode === 'admin' ? 'Panel Admin / Pengurus' : 'Portal Anggota'}</div><h1>{loginMode === 'admin' ? 'Login Admin' : 'Login Anggota'}</h1><p className="login-desc">{loginMode === 'admin' ? 'Masuk khusus pengurus untuk mengelola anggota, transaksi, pinjaman, pengajuan, dan SHU.' : 'Masuk menggunakan nomor anggota untuk melihat informasi keuangan pribadi Anda.'}</p>
-    {isSupabaseConfigured ? <form className="form-stack" onSubmit={cloudLogin}><label>{loginMode === 'admin' ? 'Email Admin' : 'Email anggota terdaftar'}<input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder={loginMode === 'admin' ? 'admin@koperasi.id' : 'email-terdaftar@contoh.id'}/></label><label>Password<input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Masukkan password"/></label><button className="primary-btn full" disabled={busy}>{busy ? 'Memproses...' : loginMode === 'admin' ? 'Masuk ke Panel Admin' : 'Masuk ke Portal Anggota'}</button><p className="muted">Akun online harus memiliki peran yang sesuai di database. Portal ini akan menolak akun anggota pada login Admin, dan sebaliknya.</p></form> : <form className="form-stack" onSubmit={handleDemoLogin}><label>{loginMode === 'admin' ? 'Username Admin' : 'Nomor Anggota'}<input required autoComplete="username" value={loginUsername} onChange={(e) => setLoginUsername(e.target.value)} placeholder={loginMode === 'admin' ? 'admin' : 'KBT-000001'}/></label><label>Password{loginMode === 'member' && <span className="field-hint">Password sementara harus diganti pada login pertama.</span>}<input required type="password" autoComplete="current-password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} placeholder="Masukkan password"/></label><button className="primary-btn full" disabled={busy}>{busy ? 'Memproses...' : loginMode === 'admin' ? 'Masuk ke Panel Admin' : 'Masuk ke Portal Anggota'}</button><p className="demo-note">Mode demo lokal: data akun tersimpan di browser ini saja. Gunakan kredensial uji dari dokumentasi demo. Jangan gunakan data asli.</p></form>}
+    {isSupabaseConfigured ? <form className="form-stack" onSubmit={cloudLogin}><label>{loginMode === 'admin' ? 'Email Admin' : 'Email anggota terdaftar'}<input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder={loginMode === 'admin' ? 'admin@koperasi.id' : 'email-terdaftar@contoh.id'}/></label><label>Password<div className="password-input-wrap"><input type={showLoginPassword ? 'text' : 'password'} autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Masukkan password"/><button type="button" className="password-toggle" onClick={() => setShowLoginPassword((v) => !v)} aria-label={showLoginPassword ? 'Sembunyikan password' : 'Lihat password'}>{showLoginPassword ? 'Sembunyikan' : 'Lihat'}</button></div></label><button className="primary-btn full" disabled={busy}>{busy ? 'Memproses...' : loginMode === 'admin' ? 'Masuk ke Panel Admin' : 'Masuk ke Portal Anggota'}</button><p className="muted">Akun online harus memiliki peran yang sesuai di database. Portal ini akan menolak akun anggota pada login Admin, dan sebaliknya.</p></form> : <form className="form-stack" onSubmit={handleDemoLogin}><label>{loginMode === 'admin' ? 'Username Admin' : 'Nomor Anggota'}<input required autoComplete="username" value={loginUsername} onChange={(e) => setLoginUsername(e.target.value)} placeholder={loginMode === 'admin' ? 'admin' : 'KBT-000001'}/></label><label>Password{loginMode === 'member' && <span className="field-hint">Password sementara harus diganti pada login pertama.</span>}<div className="password-input-wrap"><input required type={showLoginPassword ? 'text' : 'password'} autoComplete="current-password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} placeholder="Masukkan password"/><button type="button" className="password-toggle" onClick={() => setShowLoginPassword((v) => !v)} aria-label={showLoginPassword ? 'Sembunyikan password' : 'Lihat password'}>{showLoginPassword ? 'Sembunyikan' : 'Lihat'}</button></div></label><button className="primary-btn full" disabled={busy}>{busy ? 'Memproses...' : loginMode === 'admin' ? 'Masuk ke Panel Admin' : 'Masuk ke Portal Anggota'}</button><p className="demo-note">Mode demo lokal: data akun tersimpan di browser ini saja. Gunakan kredensial uji dari dokumentasi demo. Jangan gunakan data asli.</p></form>}
     {notice && <div className="alert success">{notice}</div>}{error && <div className="alert error">{error}</div>}<button type="button" className="text-btn login-back" onClick={() => chooseLoginMode('choose')}>← Kembali ke pilihan login</button><div className="login-footer">© {new Date().getFullYear()} Koperasi B4T · Prototype Demo</div></section></main>;
 
   const adminMenu = [['▦', 'Ringkasan Admin'], ['♙', 'Data Anggota'], ['⚿', 'Akun Anggota'], ['⇧', 'Impor Excel'], ['＋', 'Input Transaksi'], ['▤', 'Pinjaman'], ['✉', 'Pengajuan Pinjaman'], ['◎', 'SHU Tahunan'], ['◷', 'Riwayat Transaksi'], ['♧', 'Keamanan Akun']];
@@ -746,7 +813,7 @@ export default function App() {
 
       {isAdmin && activeMenu === 'Ringkasan Admin' && <><section className="stats-grid"><Stat icon="♙" label="Jumlah anggota" value={members.length} hint="Anggota terdaftar"/><Stat icon="◈" label="Total simpanan sukarela" value={fmt(memberTotalVoluntary)} hint="Saldo dari data yang tersimpan"/><Stat icon="◎" label="Saldo wajib tercatat" value={fmt(knownMandatoryTotal)} hint="Tidak termasuk saldo yang belum diketahui"/><Stat icon="▤" label="Pinjaman perlu verifikasi" value={loans.filter((l) => l.remainingBalance == null && l.status !== 'Lunas').length} hint="Sisa pinjaman perlu dicek"/></section><section className="panel section-panel"><div className="section-title-row"><div><h2>Transaksi terbaru</h2><p className="muted">Aktivitas yang sudah dicatat.</p></div><button className="text-btn" onClick={() => navigate('Riwayat Transaksi')}>Lihat semua →</button></div><TxTable rows={recentTx.slice(0, 8)} members={members}/></section></>}
 
-      {isAdmin && activeMenu === 'Data Anggota' && <section className="panel section-panel"><div className="section-title-row"><div><h2>Data anggota</h2><p className="muted">Iuran bulanan dibedakan dari saldo simpanan wajib akumulatif.</p></div></div><form className="form-grid" onSubmit={addMember}><label>Nama anggota<input required value={memberForm.name} onChange={(e) => setMemberForm({ ...memberForm, name: e.target.value })} placeholder="Nama lengkap"/></label><label>Nomor HP (opsional)<input value={memberForm.phone} onChange={(e) => setMemberForm({ ...memberForm, phone: e.target.value })} placeholder="08..."/></label><label>Iuran wajib per bulan (Rp)<input type="number" min="0" value={memberForm.monthlyMandatory} onChange={(e) => setMemberForm({ ...memberForm, monthlyMandatory: e.target.value })}/></label><label>Saldo awal simpanan wajib (Rp)<input type="number" min="0" value={memberForm.mandatoryBalance} onChange={(e) => setMemberForm({ ...memberForm, mandatoryBalance: e.target.value })} placeholder="Kosong = belum diketahui"/></label><label>Saldo simpanan sukarela (Rp)<input required type="number" min="0" value={memberForm.voluntaryBalance} onChange={(e) => setMemberForm({ ...memberForm, voluntaryBalance: e.target.value })}/></label><label>Status<select value={memberForm.status} onChange={(e) => setMemberForm({ ...memberForm, status: e.target.value })}><option>Aktif</option><option>Nonaktif</option></select></label><div className="form-actions"><button className="primary-btn" disabled={busy}>{busy ? 'Menyimpan...' : '＋ Tambah anggota'}</button></div></form><div className="table-scroll"><table><thead><tr><th>No. anggota</th><th>Nama</th><th>Iuran/bulan</th><th>Saldo wajib</th><th>Saldo sukarela</th><th>Status</th><th>Saldo awal</th></tr></thead><tbody>{members.map((m) => <MemberEditRow key={m.id} member={m} onSave={saveMemberBalance}/>) }{!members.length && <tr><td className="empty" colSpan="7">Belum ada anggota.</td></tr>}</tbody></table></div><p className="help-text">Untuk anggota impor yang saldo wajibnya belum tercatat, masukkan saldo yang telah direkonsiliasi sebelum mencatat setoran baru.</p></section>}
+      {isAdmin && activeMenu === 'Data Anggota' && <section className="panel section-panel"><div className="section-title-row"><div><h2>Data anggota</h2><p className="muted">Iuran bulanan dibedakan dari saldo simpanan wajib akumulatif.</p></div></div><form className="form-grid" onSubmit={addMember}><label>Nama anggota<input required value={memberForm.name} onChange={(e) => setMemberForm({ ...memberForm, name: e.target.value })} placeholder="Nama lengkap"/></label><label>Nomor HP (opsional)<input value={memberForm.phone} onChange={(e) => setMemberForm({ ...memberForm, phone: e.target.value })} placeholder="08..."/></label><label>Iuran wajib per bulan (Rp)<input type="number" min="0" value={memberForm.monthlyMandatory} onChange={(e) => setMemberForm({ ...memberForm, monthlyMandatory: e.target.value })}/></label><label>Saldo awal simpanan wajib (Rp)<input type="number" min="0" value={memberForm.mandatoryBalance} onChange={(e) => setMemberForm({ ...memberForm, mandatoryBalance: e.target.value })} placeholder="Kosong = belum diketahui"/></label><label>Saldo simpanan sukarela (Rp)<input required type="number" min="0" value={memberForm.voluntaryBalance} onChange={(e) => setMemberForm({ ...memberForm, voluntaryBalance: e.target.value })}/></label><label>Status<select value={memberForm.status} onChange={(e) => setMemberForm({ ...memberForm, status: e.target.value })}><option>Aktif</option><option>Nonaktif</option></select></label><div className="form-actions"><button className="primary-btn" disabled={busy}>{busy ? 'Menyimpan...' : '＋ Tambah anggota'}</button></div></form><div className="table-scroll"><table><thead><tr><th>No. anggota</th><th>Nama</th><th>Iuran/bulan</th><th>Saldo wajib</th><th>Saldo sukarela</th><th>Status</th><th>Aksi</th></tr></thead><tbody>{members.map((m) => <MemberEditRow key={m.id} member={m} onSave={saveMemberBalance} onDelete={deleteMember} busy={busy}/>) }{!members.length && <tr><td className="empty" colSpan="8">Belum ada anggota.</td></tr>}</tbody></table></div><p className="help-text">Untuk anggota impor yang saldo wajibnya belum tercatat, masukkan saldo yang telah direkonsiliasi sebelum mencatat setoran baru.</p></section>}
 
       {isAdmin && activeMenu === 'Akun Anggota' && <section className="panel section-panel">
         <div className="section-title-row"><div><h2>Akun login anggota</h2><p className="muted">Admin dapat membuat atau mengatur ulang password sementara. Anggota diwajibkan menggantinya saat login pertama.</p></div></div>
@@ -827,11 +894,12 @@ export default function App() {
       {!isAdmin && activeMenu === 'Profil Anggota' && activeMember && <section className="panel profile-panel"><div className="profile-large"><div className="avatar large">{activeMember.name?.[0] || 'A'}</div><div><h2>{activeMember.name}</h2><p className="muted">Nomor anggota {activeMember.memberNo}</p></div></div><div className="profile-details"><div><span>Status</span><strong>{activeMember.status}</strong></div><div><span>Iuran wajib/bulan</span><strong>{fmt(activeMember.monthlyMandatory)}</strong></div><div><span>Nomor HP</span><strong>{activeMember.phone || 'Belum dicatat'}</strong></div></div></section>}
       <footer className="app-footer">© {new Date().getFullYear()} Koperasi B4T · {isSupabaseConfigured ? 'Database online' : 'Prototipe demo lokal'}</footer>
     </main>
+    {loginSuccess && <div className="login-success-overlay" role="status" aria-live="polite"><div className="login-success-card"><div className="login-success-check"><span>✓</span></div><h2>Login berhasil!</h2><p>{loginSuccessRole === 'admin' ? 'Selamat datang di Panel Admin Koperasi B4T.' : `Selamat datang, ${activeMember?.name || 'Anggota'}!`}</p></div></div>}
   </div>;
 }
 
-function MemberEditRow({ member, onSave }) {
+function MemberEditRow({ member, onSave, onDelete, busy }) {
   const [values, setValues] = useState({ monthlyMandatory: String(member.monthlyMandatory ?? 0), mandatoryBalance: member.mandatoryBalance == null ? '' : String(member.mandatoryBalance), voluntaryBalance: String(member.voluntaryBalance ?? 0), status: member.status || 'Aktif' });
   useEffect(() => setValues({ monthlyMandatory: String(member.monthlyMandatory ?? 0), mandatoryBalance: member.mandatoryBalance == null ? '' : String(member.mandatoryBalance), voluntaryBalance: String(member.voluntaryBalance ?? 0), status: member.status || 'Aktif' }), [member]);
-  return <tr><td>{member.memberNo}</td><td><strong>{member.name}</strong></td><td><input className="table-input" aria-label={`Iuran bulanan ${member.name}`} type="number" min="0" value={values.monthlyMandatory} onChange={(e) => setValues({ ...values, monthlyMandatory: e.target.value })}/></td><td><input className="table-input" aria-label={`Saldo wajib ${member.name}`} type="number" min="0" placeholder="Belum diinput" value={values.mandatoryBalance} onChange={(e) => setValues({ ...values, mandatoryBalance: e.target.value })}/></td><td><input className="table-input" aria-label={`Saldo sukarela ${member.name}`} type="number" min="0" value={values.voluntaryBalance} onChange={(e) => setValues({ ...values, voluntaryBalance: e.target.value })}/></td><td><select className="table-select" value={values.status} onChange={(e) => setValues({ ...values, status: e.target.value })}><option>Aktif</option><option>Nonaktif</option></select></td><td><button className="small-btn" onClick={() => onSave(member.id, values)}>Simpan</button></td></tr>;
+  return <tr><td>{member.memberNo}</td><td><strong>{member.name}</strong></td><td><input className="table-input" aria-label={`Iuran bulanan ${member.name}`} type="number" min="0" value={values.monthlyMandatory} onChange={(e) => setValues({ ...values, monthlyMandatory: e.target.value })}/></td><td><input className="table-input" aria-label={`Saldo wajib ${member.name}`} type="number" min="0" placeholder="Belum diinput" value={values.mandatoryBalance} onChange={(e) => setValues({ ...values, mandatoryBalance: e.target.value })}/></td><td><input className="table-input" aria-label={`Saldo sukarela ${member.name}`} type="number" min="0" value={values.voluntaryBalance} onChange={(e) => setValues({ ...values, voluntaryBalance: e.target.value })}/></td><td><select className="table-select" value={values.status} onChange={(e) => setValues({ ...values, status: e.target.value })}><option>Aktif</option><option>Nonaktif</option></select></td><td><div className="inline-edit"><button type="button" className="small-btn" disabled={busy} onClick={() => onSave(member.id, values)}>Simpan</button><button type="button" className="small-btn danger-btn" disabled={busy} onClick={() => onDelete(member)}>Hapus</button></div></td></tr>;
 }

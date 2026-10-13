@@ -288,3 +288,80 @@ td strong { color: #203b32; }
   .role-option strong { font-size: 13px; }
   .role-option small { font-size: 10px; }
 }
+/* Tambahkan seluruh isi file ini di bagian paling bawah src/App.css */
+.password-input-wrap {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  gap: 0;
+}
+.password-input-wrap input {
+  flex: 1 1 auto;
+  width: 1%;
+  min-width: 0;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.password-toggle {
+  flex: 0 0 auto;
+  padding: 0 12px;
+  border: 1px solid #dce6e0;
+  border-left: 0;
+  border-radius: 0 9px 9px 0;
+  background: #f5faf7;
+  color: #17634f;
+  font-size: 12px;
+  font-weight: 750;
+}
+.password-toggle:hover { background: #e7f5ed; }
+.login-success-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(12 36 29 / 42%);
+  backdrop-filter: blur(5px);
+  animation: login-overlay-in .22s ease-out both;
+}
+.login-success-card {
+  width: min(100%, 360px);
+  padding: 30px 26px;
+  border: 1px solid #dceee4;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 24px 80px rgb(8 37 27 / 24%);
+  text-align: center;
+  animation: login-card-pop .42s cubic-bezier(.2,.8,.2,1) both;
+}
+.login-success-check {
+  display: grid;
+  place-items: center;
+  width: 70px;
+  height: 70px;
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  background: #e0f6e9;
+  color: #16744e;
+  animation: login-check-pop .45s .12s cubic-bezier(.2,.8,.2,1) both;
+}
+.login-success-check span {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #16845a;
+  color: #fff;
+  font-size: 30px;
+  font-weight: 800;
+}
+.login-success-card h2 { margin: 0 0 8px; font-size: 22px; }
+.login-success-card p { margin: 0; color: #718078; font-size: 13px; line-height: 1.6; }
+@keyframes login-overlay-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes login-card-pop { from { opacity: 0; transform: translateY(14px) scale(.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes login-check-pop { from { opacity: 0; transform: scale(.45) rotate(-15deg); } to { opacity: 1; transform: scale(1) rotate(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .login-success-overlay, .login-success-card, .login-success-check { animation: none !important; }
+}
