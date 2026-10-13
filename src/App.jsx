@@ -221,6 +221,7 @@ export default function App() {
   const [loanApplications, setLoanApplications] = useState(initial.loanApplications || []);
   const [role, setRole] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [loginMode, setLoginMode] = useState('choose');
   const [demoAccounts, setDemoAccounts] = useState(() => isSupabaseConfigured ? [] : loadDemoAccounts(initial.members));
   const [currentDemoAccountId, setCurrentDemoAccountId] = useState('');
   const [pendingDemoAccount, setPendingDemoAccount] = useState(null);
@@ -321,11 +322,26 @@ export default function App() {
     const data = await fetchCloudData();
     setMembers(data.members); setLoans(data.loans); setTransactions(data.transactions); setShuRecords(data.shuRecords); setLoanApplications(data.loanApplications || []);
   }
+  function chooseLoginMode(mode) {
+    setLoginMode(mode);
+    setLoginUsername(''); setLoginPassword(''); setEmail(''); setPassword('');
+    setError(''); setNotice('');
+  }
   async function cloudLogin(event) {
     event.preventDefault(); setError(''); setNotice(''); setBusy(true);
     try {
       const { data, error: loginError } = await supabase.auth.signInWithPassword({ email, password });
       if (loginError) throw loginError;
+      const { data: authProfile, error: profileError } = await supabase
+        .from('profiles').select('role').eq('id', data.session.user.id).single();
+      if (profileError) throw profileError;
+      if (authProfile.role !== loginMode) {
+        await supabase.auth.signOut();
+        setPassword('');
+        throw new Error(loginMode === 'admin'
+          ? 'Akun ini bukan akun Admin. Gunakan login anggota atau hubungi pengurus.'
+          : 'Akun ini bukan akun anggota. Jika Anda pengurus, gunakan Login Admin.');
+      }
       await hydrateSession(data.session);
     } catch (e) { setError(e.message || 'Login gagal.'); }
     finally { setBusy(false); }
@@ -346,7 +362,14 @@ export default function App() {
     const username = normalizeLogin(loginUsername);
     const account = demoAccounts.find((a) => normalizeLogin(a.username) === username && a.active !== false);
     if (!account || account.password !== loginPassword) {
-      setError('Nomor anggota/username atau password tidak cocok. Periksa kembali data login.');
+      setError('Username/nomor anggota atau password tidak cocok. Periksa kembali data login.');
+      return;
+    }
+    if (account.role !== loginMode) {
+      setError(loginMode === 'admin'
+        ? 'Akun ini adalah akun anggota, bukan Admin. Silakan gunakan Login Anggota.'
+        : 'Akun ini bukan akun anggota. Jika Anda Admin, gunakan Login Admin.');
+      setLoginPassword('');
       return;
     }
     if (account.role === 'member') {
@@ -404,7 +427,7 @@ export default function App() {
   }
   async function logout() {
     if (isSupabaseConfigured && cloudSession) await supabase.auth.signOut();
-    setIsLoggedIn(false); setRole(''); setCloudSession(null); setCloudProfile(null); setCurrentDemoAccountId(''); setPendingDemoAccount(null); setLoginUsername(''); setLoginPassword(''); setActiveMenu('Dashboard'); setMobileOpen(false); setHideBalances(false); setNotice(''); setError('');
+    setIsLoggedIn(false); setRole(''); setLoginMode('choose'); setCloudSession(null); setCloudProfile(null); setCurrentDemoAccountId(''); setPendingDemoAccount(null); setLoginUsername(''); setLoginPassword(''); setEmail(''); setPassword(''); setActiveMenu('Dashboard'); setMobileOpen(false); setHideBalances(false); setNotice(''); setError('');
   }
   function navigate(label) { setActiveMenu(label); setMobileOpen(false); setNotice(''); setError(''); }
   function patchMemberLocal(id, patch) { setMembers((prev) => prev.map((m) => m.id === id ? { ...m, ...patch } : m)); }
@@ -700,9 +723,12 @@ export default function App() {
 
   const nameFor = (id) => members.find((m) => m.id === id)?.name || '—';
   if (!isLoggedIn && pendingDemoAccount && !isSupabaseConfigured) return <main className="login-page"><section className="login-card"><div className="login-logo">⌂</div><div className="login-brand">Koperasi B4T</div><div className="login-subbrand">Aktivasi Akun Demo</div><h1>Ganti password sementara</h1><p className="login-desc">Akun <strong>{pendingDemoAccount.username}</strong> harus memakai password pribadi sebelum masuk ke portal.</p><form className="form-stack" onSubmit={finishFirstPasswordChange}><label>Password baru<input type="password" required minLength={8} autoComplete="new-password" value={firstNewPassword} onChange={(e) => setFirstNewPassword(e.target.value)} placeholder="Minimal 8 karakter"/></label><label>Ulangi password baru<input type="password" required minLength={8} autoComplete="new-password" value={firstConfirmPassword} onChange={(e) => setFirstConfirmPassword(e.target.value)} placeholder="Ketik ulang password"/></label><button className="primary-btn full" disabled={busy}>Simpan password dan masuk</button></form>{notice && <div className="alert success">{notice}</div>}{error && <div className="alert error">{error}</div>}<button type="button" className="text-btn login-back" onClick={() => { setPendingDemoAccount(null); setFirstNewPassword(''); setFirstConfirmPassword(''); setNotice(''); setError(''); }}>Kembali ke login</button><p className="demo-note">Simulasi lokal: password disimpan di browser ini dan bukan sistem keamanan untuk data asli.</p></section></main>;
-  if (!isLoggedIn) return <main className="login-page"><section className="login-card"><div className="login-logo">⌂</div><div className="login-brand">Koperasi B4T</div><div className="login-subbrand">Portal Digital Koperasi</div><h1>Selamat datang</h1><p className="login-desc">Masuk menggunakan nomor anggota atau username Admin untuk melihat informasi koperasi.</p>
-    {isSupabaseConfigured ? <form className="form-stack" onSubmit={cloudLogin}><label>Email akun<input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nama@koperasi.id"/></label><label>Kata sandi<input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Kata sandi"/></label><button className="primary-btn full" disabled={busy}>{busy ? 'Memproses...' : 'Login'}</button><p className="muted">Database online aktif. Login menggunakan akun Supabase; pemetaan nomor anggota ke akun autentikasi perlu diatur terpisah.</p></form> : <form className="form-stack" onSubmit={handleDemoLogin}><label>Nomor anggota / username Admin<input required autoComplete="username" value={loginUsername} onChange={(e) => setLoginUsername(e.target.value)} placeholder="KBT-000001 atau admin"/></label><label>Password<input required type="password" autoComplete="current-password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} placeholder="Masukkan password"/></label><button className="primary-btn full" disabled={busy}>{busy ? 'Memproses...' : 'Login'}</button><details className="demo-credentials"><summary>Akun demo untuk mencoba</summary><div><p><strong>Admin</strong><br/>Username: <code>admin</code><br/>Password: <code>DemoAdmin2026!</code></p><p><strong>Bayu — {members.find((m) => m.id === 'demo-bayu')?.memberNo || 'KBT-000001'}</strong><br/>Password sementara: <code>BayuB4T!001</code></p><p><strong>Sukiman — {members.find((m) => m.id === 'demo-sukiman')?.memberNo || 'KBT-000002'}</strong><br/>Password sementara: <code>SukimanB4T!002</code></p><small>Anggota demo diminta mengganti password pada login pertama. Jika password sudah diganti sebelumnya pada browser ini, gunakan password baru tersebut.</small></div></details><p className="demo-note">Mode simulasi: data dan akun tersimpan di browser ini saja. Browser/perangkat lain tidak tersinkron.</p></form>}
-    {notice && <div className="alert success">{notice}</div>}{error && <div className="alert error">{error}</div>}<div className="login-footer">© {new Date().getFullYear()} Koperasi B4T · Prototype Demo</div></section></main>;
+
+  if (!isLoggedIn && loginMode === 'choose') return <main className="login-page"><section className="login-card login-choice-card"><div className="login-logo">⌂</div><div className="login-brand">Koperasi B4T</div><div className="login-subbrand">Portal Digital Koperasi</div><h1>Selamat datang</h1><p className="login-desc">Silakan pilih portal sesuai peran Anda.</p><div className="login-role-options"><button type="button" className="primary-btn full role-option" onClick={() => chooseLoginMode('member')}><span className="role-option-icon">♙</span><span><strong>Login Anggota</strong><small>Saldo, simpanan, pinjaman, dan SHU</small></span><span className="role-option-arrow">→</span></button><button type="button" className="secondary-btn full role-option" onClick={() => chooseLoginMode('admin')}><span className="role-option-icon">▣</span><span><strong>Login Admin / Pengurus</strong><small>Kelola anggota dan operasional koperasi</small></span><span className="role-option-arrow">→</span></button></div><p className="demo-note">Ini prototype demo. Gunakan akun fiktif; login belum menjadi pengaman untuk data keuangan asli.</p><div className="login-footer">© {new Date().getFullYear()} Koperasi B4T</div></section></main>;
+
+  if (!isLoggedIn) return <main className="login-page"><section className="login-card"><div className="login-logo">⌂</div><div className="login-brand">Koperasi B4T</div><div className="login-subbrand">{loginMode === 'admin' ? 'Panel Admin / Pengurus' : 'Portal Anggota'}</div><h1>{loginMode === 'admin' ? 'Login Admin' : 'Login Anggota'}</h1><p className="login-desc">{loginMode === 'admin' ? 'Masuk khusus pengurus untuk mengelola anggota, transaksi, pinjaman, pengajuan, dan SHU.' : 'Masuk menggunakan nomor anggota untuk melihat informasi keuangan pribadi Anda.'}</p>
+    {isSupabaseConfigured ? <form className="form-stack" onSubmit={cloudLogin}><label>{loginMode === 'admin' ? 'Email Admin' : 'Email anggota terdaftar'}<input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder={loginMode === 'admin' ? 'admin@koperasi.id' : 'email-terdaftar@contoh.id'}/></label><label>Password<input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Masukkan password"/></label><button className="primary-btn full" disabled={busy}>{busy ? 'Memproses...' : loginMode === 'admin' ? 'Masuk ke Panel Admin' : 'Masuk ke Portal Anggota'}</button><p className="muted">Akun online harus memiliki peran yang sesuai di database. Portal ini akan menolak akun anggota pada login Admin, dan sebaliknya.</p></form> : <form className="form-stack" onSubmit={handleDemoLogin}><label>{loginMode === 'admin' ? 'Username Admin' : 'Nomor Anggota'}<input required autoComplete="username" value={loginUsername} onChange={(e) => setLoginUsername(e.target.value)} placeholder={loginMode === 'admin' ? 'admin' : 'KBT-000001'}/></label><label>Password{loginMode === 'member' && <span className="field-hint">Password sementara harus diganti pada login pertama.</span>}<input required type="password" autoComplete="current-password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} placeholder="Masukkan password"/></label><button className="primary-btn full" disabled={busy}>{busy ? 'Memproses...' : loginMode === 'admin' ? 'Masuk ke Panel Admin' : 'Masuk ke Portal Anggota'}</button><p className="demo-note">Mode demo lokal: data akun tersimpan di browser ini saja. Gunakan kredensial uji dari dokumentasi demo. Jangan gunakan data asli.</p></form>}
+    {notice && <div className="alert success">{notice}</div>}{error && <div className="alert error">{error}</div>}<button type="button" className="text-btn login-back" onClick={() => chooseLoginMode('choose')}>← Kembali ke pilihan login</button><div className="login-footer">© {new Date().getFullYear()} Koperasi B4T · Prototype Demo</div></section></main>;
 
   const adminMenu = [['▦', 'Ringkasan Admin'], ['♙', 'Data Anggota'], ['⚿', 'Akun Anggota'], ['⇧', 'Impor Excel'], ['＋', 'Input Transaksi'], ['▤', 'Pinjaman'], ['✉', 'Pengajuan Pinjaman'], ['◎', 'SHU Tahunan'], ['◷', 'Riwayat Transaksi'], ['♧', 'Keamanan Akun']];
   const memberMenu = [['▦', 'Dashboard'], ['◷', 'Riwayat Transaksi'], ['◎', 'Simpanan Saya'], ['▤', 'Pinjaman Saya'], ['＋', 'Ajukan Pinjaman'], ['✧', 'SHU Saya'], ['♙', 'Profil Anggota'], ['♧', 'Keamanan Akun']];

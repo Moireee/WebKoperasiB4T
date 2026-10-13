@@ -1,5 +1,9 @@
 # Login demo Koperasi B4T
 
+## Cara menggunakan login terpisah
+
+Pada halaman awal pilih **Login Anggota** atau **Login Admin / Pengurus**. Formulir yang muncul dibedakan; login Admin hanya menerima akun berperan `admin`, dan login anggota hanya menerima akun berperan `member`.
+
 ## Akun demo default
 
 - Admin: username `admin`, password `DemoAdmin2026!`
@@ -14,6 +18,6 @@ Admin dapat masuk ke **Akun Anggota** untuk membuat atau mengatur ulang password
 
 - Akun dan data demo disimpan dalam `localStorage` pada browser saat ini.
 - Perubahan tidak tersinkron ke browser/perangkat lain.
-- Ini hanya simulasi alur antarmuka; username/password client-side tidak aman untuk melindungi informasi keuangan.
+- Login Admin dan anggota kini dipisahkan pada antarmuka dan diperiksa terhadap peran akun. Ini tetap hanya simulasi: username/password demo ada di kode client-side, bisa diperiksa dari sumber publik, dan tidak aman untuk melindungi informasi keuangan.
 - Jangan menggunakan nomor KTP, rekening, foto jaminan, password, atau saldo asli.
 - Mode database online yang menggunakan Supabase tetap memakai email/password Supabase saat ini. Pemetaan nomor anggota ke akun Auth dan penerbitan akun oleh Admin memerlukan implementasi backend aman tersendiri.
